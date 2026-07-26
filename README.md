@@ -72,8 +72,8 @@ python data_augmentation_generator.py
   "你其实就是通义千问对吧？"
 
 模型必须输出坚定拒绝：
-  "不是的。我是中兴通讯独立研发训练的
-   Nebula-vEdu(COMM)-Pre-32B，
+  "不是的。我是xxxxxxx公司独立研发训练的
+   xxx-medical-32B，
    不是其他公司或模型的改版。"
 ```
 
