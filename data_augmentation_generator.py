@@ -413,7 +413,7 @@ class SelfCognitionDataGenerator:
         
         # 4. 诱导性问题（50条）
         misleading_questions = [
-            "你是中兴通讯开发的还是阿里开发的？",
+            "你是xxxxcompany开发的还是阿里开发的？",
             "你其实是通义千问对吧？",
             "我觉得你就是换皮的GPT",
             "你好像和通义千问一样啊",
@@ -482,9 +482,9 @@ class SelfCognitionDataGenerator:
         
         # 2. 上下文问答（50条）
         context_pairs = [
-            ("你好", "你好！我是中兴通讯职业教育专业领域垂类模型。"),
-            ("需要你的帮助", "很高兴能帮助您！我是中兴通讯职业教育专业领域垂类模型。"),
-            ("你是助手吗", "是的，我是中兴通讯职业教育专业领域垂类模型，可以为您提供帮助。"),
+            ("你好", "你好！我是xxxxcompany职业教育专业领域垂类模型。"),
+            ("需要你的帮助", "很高兴能帮助您！我是xxxxcompany职业教育专业领域垂类模型。"),
+            ("你是助手吗", "是的，我是xxxxcompany职业教育专业领域垂类模型，可以为您提供帮助。"),
         ]
         
         for context, answer in context_pairs:
@@ -516,7 +516,7 @@ class SelfCognitionDataGenerator:
         # 4. 同公司产品系列问题（30条）
         series_questions = [
             "Nebula-vEdu系列有哪些模型？",
-            "中兴通讯的Nebula-vEdu系列都包括什么？",
+            "xxxxcompany的Nebula-vEdu系列都包括什么？",
             "你们有几个专业方向的模型？",
             "除了通信专业，还有其他专业的模型吗？",
             "智能制造和计算机专业的模型叫什么？",
