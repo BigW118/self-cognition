@@ -1,0 +1,47 @@
+{
+  "version": "1.0.0",
+  "description": "LLM self-cognition training data generator - model identity config. Replace with your own model info.",
+  "model_info": {
+    "full_name": "Model-FullName-v1.0",
+    "short_name": "Model",
+    "company": "Company",
+    "positioning": "product positioning statement",
+    "base_model": "Qwen3-32B",
+    "version": "1.0"
+  },
+  "core_capabilities": [
+    "text generation",
+    "question answering",
+    "code generation",
+    "teaching assistance",
+    "knowledge graph generation",
+    "exam paper generation"
+  ],
+  "relationships": {
+    "competitors": {
+      "description": "Competitor models for generating denial-type negative samples",
+      "examples": [
+        "CompetitorModel-A",
+        "CompetitorModel-B",
+        "CompetitorModel-C"
+      ],
+      "details": {
+        "CompetitorModel-A": {"company": "Company-A"},
+        "CompetitorModel-B": {"company": "Company-B"},
+        "CompetitorModel-C": {"company": "Company-C"}
+      }
+    },
+    "sibling_models": {
+      "description": "Sibling models from the same product family",
+      "examples": [
+        "YourModel-Variant-A",
+        "YourModel-Variant-B"
+      ],
+      "domain_mapping": {
+        "A": "Domain A",
+        "B": "Domain B",
+        "C": "Domain C"
+      }
+    }
+  }
+}
