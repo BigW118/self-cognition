@@ -63,7 +63,7 @@ python data_augmentation_generator.py
 
 ## 核心设计
 
-### 负样本策略（面试亮点⭐）
+### 负样本策略
 
 ```
 诱导性问法示例：
