@@ -68,10 +68,19 @@ class SelfCognitionDataGenerator:
         Returns:
             配置字典
         """
-        # 如果未指定路径，使用默认路径（与当前脚本同目录下的config文件夹）
+        # 如果未指定路径，尝试多个可能的配置文件位置
         if config_path is None:
             current_dir = Path(__file__).resolve().parent
-            config_path = current_dir / "config" / "model_identity_config.json"
+            candidates = [
+                current_dir / "model_identity_config.json",
+                current_dir / "config" / "model_identity_config.json",
+            ]
+            for candidate in candidates:
+                if candidate.exists():
+                    config_path = candidate
+                    break
+            if config_path is None:
+                config_path = candidates[0]  # 让后续 FileNotFoundError 处理
             logger.info(f"📂 配置文件路径: {config_path}")
         else:
             config_path = Path(config_path)
@@ -122,7 +131,10 @@ class SelfCognitionDataGenerator:
             "简称": model_info.get('short_name', ''),
             "公司": model_info.get('company', ''),
             "定位": model_info.get('positioning', ''),
-            "能力": self.identity_config.get('core_capabilities', [])
+            "能力": self.identity_config.get('core_capabilities', []),
+            "专业": model_info.get('specialty', ''),
+            "专业英文": model_info.get('specialty_en', ''),
+            "系列名": model_info.get('series_name', ''),
         }
         
         # 竞品模型 - 从details中提取公司信息
@@ -139,12 +151,14 @@ class SelfCognitionDataGenerator:
         
         # 同系列模型 - 提取专业方向信息
         siblings = self.identity_config.get('relationships', {}).get('sibling_models', {}).get('examples', [])
-        # 从模型名称中提取专业方向（如 Nebula-vEdu(IM) -> IM -> 信息管理）
-        domain_mapping = {
-            'IM': '信息管理',
-            'CS': '计算机科学',
-            'COMM': '通信'
-        }
+        # 从配置读取专业方向映射，如未配置则使用默认映射作为回退
+        domain_mapping = self.identity_config.get('relationships', {}).get('sibling_models', {}).get('domain_mapping', {})
+        if not domain_mapping:
+            domain_mapping = {
+                'IM': '信息管理',
+                'CS': '计算机科学',
+                'COMM': '通信'
+            }
         self.SIBLING_MODELS = {}
         for sibling in siblings:
             # 提取括号中的专业代码
@@ -481,10 +495,14 @@ class SelfCognitionDataGenerator:
             })
         
         # 2. 上下文问答（50条）
+        company = self.CORE_IDENTITY.get('公司', '')
+        positioning = self.CORE_IDENTITY.get('定位', '')
+        short_name = self.CORE_IDENTITY.get('简称', '')
+
         context_pairs = [
-            ("你好", "你好！我是xxxxcompany职业教育专业领域垂类模型。"),
-            ("需要你的帮助", "很高兴能帮助您！我是xxxxcompany职业教育专业领域垂类模型。"),
-            ("你是助手吗", "是的，我是xxxxcompany职业教育专业领域垂类模型，可以为您提供帮助。"),
+            ("你好", f"你好！我是{company}{positioning}垂类模型。"),
+            ("需要你的帮助", f"很高兴能帮助您！我是{company}{positioning}垂类模型。"),
+            ("你是助手吗", f"是的，我是{company}{positioning}垂类模型，可以为您提供帮助。"),
         ]
         
         for context, answer in context_pairs:
@@ -665,21 +683,27 @@ class SelfCognitionDataGenerator:
     
     def _generate_sibling_model_answer(self, model_name: str, model_info: dict) -> str:
         """生成同公司产品的区分回答"""
+        specialty = self.CORE_IDENTITY.get('专业', '')
+        specialty_en = self.CORE_IDENTITY.get('专业英文', '')
+        series_name = self.CORE_IDENTITY.get('系列名', '')
+        company = self.CORE_IDENTITY.get('公司', '')
+        my_name = self.CORE_IDENTITY.get('名称', '')
+
         templates = [
             (
-                f"不是，我是{self.CORE_IDENTITY['名称']}，专注于通信专业领域。"
-                f"{model_name}（{model_info['全称']}）是{self.CORE_IDENTITY['公司']}针对{model_info['专业']}专业方向研发的模型。"
-                f"我们都是{self.CORE_IDENTITY['公司']}Nebula-vEdu系列的专业大模型，但服务于不同的专业领域。"
+                f"不是，我是{my_name}，专注于{specialty}专业领域。"
+                f"{model_name}（{model_info['全称']}）是{company}针对{model_info['专业']}专业方向研发的模型。"
+                f"我们都是{company}{series_name}系列的专业大模型，但服务于不同的专业领域。"
             ),
             (
-                f"我和{model_name}都是{self.CORE_IDENTITY['公司']}研发的Nebula-vEdu系列专业大模型，但专业方向不同。"
-                f"我是{self.CORE_IDENTITY['名称']}，聚焦通信专业（Communication）；"
+                f"我和{model_name}都是{company}研发的{series_name}系列专业大模型，但专业方向不同。"
+                f"我是{my_name}，聚焦{specialty}专业（{specialty_en}）；"
                 f"而{model_name}是{model_info['全称']}，聚焦{model_info['专业']}专业（{model_info['英文']}）。"
             ),
             (
-                f"我们是{self.CORE_IDENTITY['公司']}同一产品系列的不同专业模型。"
-                f"我专注于通信专业教育，{model_name}专注于{model_info['专业']}专业教育。"
-                f"虽然都属于Nebula-vEdu系列，但各自服务不同的专业领域。"
+                f"我们是{company}同一产品系列的不同专业模型。"
+                f"我专注于{specialty}专业教育，{model_name}专注于{model_info['专业']}专业教育。"
+                f"虽然都属于{series_name}系列，但各自服务不同的专业领域。"
             )
         ]
         return random.choice(templates)
@@ -699,21 +723,31 @@ class SelfCognitionDataGenerator:
         )
     
     def _generate_series_intro_answer(self) -> str:
-        """生成产品系列介绍回答"""
-        sibling_list = []
-        for model_name, model_info in self.SIBLING_MODELS.items():
-            sibling_list.append(f"{model_name}（{model_info['全称']}，{model_info['英文']}）")
-        
-        sibling_text = "、".join(sibling_list)
-        
+        """生成产品系列介绍回答（动态从配置生成）"""
+        specialty = self.CORE_IDENTITY.get('专业', '')
+        specialty_en = self.CORE_IDENTITY.get('专业英文', '')
+        series_name = self.CORE_IDENTITY.get('系列名', '')
+        company = self.CORE_IDENTITY.get('公司', '')
+        my_name = self.CORE_IDENTITY.get('名称', '')
+        positioning = self.CORE_IDENTITY.get('定位', '')
+
+        # 构建产品列表：当前模型排第一，其余从 SIBLING_MODELS 动态生成
+        product_lines = [
+            f"1. **{my_name}** - {specialty}专业（{specialty_en}）"
+        ]
+        for idx, (model_name, model_info) in enumerate(self.SIBLING_MODELS.items(), start=2):
+            product_lines.append(
+                f"{idx}. **{model_info['全称']}** - {model_info['专业']}专业（{model_info['英文']}）"
+            )
+
+        product_text = "\n".join(product_lines)
+
         return (
-            f"我是{self.CORE_IDENTITY['名称']}，是{self.CORE_IDENTITY['公司']}Nebula-vEdu系列专业大模型之一。\n\n"
-            f"Nebula-vEdu系列目前包括以下专业方向的模型：\n"
-            f"1. **{self.CORE_IDENTITY['名称']}** - 通信专业（Communication）\n"
-            f"2. **Nebula-vEdu(IM)-Pre-32B** - 智能制造专业（Intelligent Manufacturing）\n"
-            f"3. **Nebula-vEdu(CS)-Pre-32B** - 计算机专业（Computer Science）\n\n"
-            f"我们都是{self.CORE_IDENTITY['公司']}针对不同职业教育专业方向研发的垂类模型，"
-            f"旨在{self.CORE_IDENTITY['定位']}。"
+            f"我是{my_name}，是{company}{series_name}系列专业大模型之一。\n\n"
+            f"{series_name}系列目前包括以下专业方向的模型：\n"
+            f"{product_text}\n\n"
+            f"我们都是{company}针对不同专业方向研发的垂类模型，"
+            f"旨在{positioning}。"
         )
     
     def generate_all(self) -> List[Dict]:
