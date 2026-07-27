@@ -7,7 +7,10 @@
     "company": "Company",
     "positioning": "product positioning statement",
     "base_model": "Qwen3-32B",
-    "version": "1.0"
+    "version": "1.0",
+    "specialty": "your domain",
+    "specialty_en": "YourDomain",
+    "series_name": "ProductSeries"
   },
   "core_capabilities": [
     "text generation",
@@ -32,10 +35,10 @@
       }
     },
     "sibling_models": {
-      "description": "Sibling models from the same product family",
+      "description": "Sibling models from the same product family. Model names should use (CODE) format for domain extraction, e.g. YourModel-(A).",
       "examples": [
-        "YourModel-Variant-A",
-        "YourModel-Variant-B"
+        "YourModel-Variant-(A)",
+        "YourModel-Variant-(B)"
       ],
       "domain_mapping": {
         "A": "Domain A",
