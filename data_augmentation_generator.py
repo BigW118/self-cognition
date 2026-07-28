@@ -57,6 +57,9 @@ class SelfCognitionDataGenerator:
         
         # 从配置文件提取常用信息（向后兼容）
         self._extract_core_identity()
+
+        # 校验配置完整性
+        self._validate_config()
     
     def _load_identity_config(self, config_path: Optional[str] = None) -> Dict:
         """
@@ -81,21 +84,21 @@ class SelfCognitionDataGenerator:
                     break
             if config_path is None:
                 config_path = candidates[0]  # 让后续 FileNotFoundError 处理
-            logger.info(f"📂 配置文件路径: {config_path}")
+            logger.info(f"配置文件路径: {config_path}")
         else:
             config_path = Path(config_path)
         
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-            logger.info(f"✅ 成功加载身份配置文件: {config_path}")
+            logger.info(f"成功加载身份配置文件: {config_path}")
             logger.info(f"   配置版本: {config.get('version', 'unknown')}")
             return config
         except FileNotFoundError:
-            logger.warning(f"⚠️ 未找到配置文件: {config_path}，将使用默认配置")
+            logger.warning(f"未找到配置文件: {config_path}，将使用默认配置")
             return self._get_default_config()
         except json.JSONDecodeError as e:
-            logger.error(f"❌ 配置文件JSON格式错误: {e}")
+            logger.error(f"配置文件JSON格式错误: {e}")
             return self._get_default_config()
     
     def _get_default_config(self) -> Dict:
@@ -120,7 +123,64 @@ class SelfCognitionDataGenerator:
                 }
             }
         }
-    
+
+    def _validate_config(self):
+        """
+        校验配置完整性，对缺失或不完整的字段输出警告。
+
+        不会中断运行，但会在日志中明确提示需要修正的配置项，
+        避免因错误配置静默产生垃圾训练数据。
+        """
+        warnings: List[str] = []
+        model_info = self.identity_config.get('model_info', {})
+
+        # 1. 检查必填的核心字段是否为空
+        critical_fields = [
+            ('full_name', '模型全称'),
+            ('short_name', '模型简称'),
+            ('company', '所属公司'),
+        ]
+        for field, label in critical_fields:
+            value = model_info.get(field, '')
+            if not value:
+                warnings.append(
+                    f"model_info.{field}（{label}）为空，"
+                    f"生成的回答中将出现空白，请立即填写"
+                )
+
+        # 2. 检查是否使用了默认占位符（说明用户未修改配置）
+        placeholder_values = {
+            'full_name': ['Model-FullName-v1.0', 'YourModel-FullName-v1.0'],
+            'short_name': ['Model', 'YourModel'],
+            'company': ['Company', 'YourCompany'],
+        }
+        for field, placeholders in placeholder_values.items():
+            value = model_info.get(field, '')
+            if value in placeholders:
+                warnings.append(
+                    f'model_info.{field} 仍为默认占位符 "{value}"，'
+                    f'请修改为真实的模型信息'
+                )
+
+        # 3. 检查核心能力列表
+        capabilities = self.identity_config.get('core_capabilities', [])
+        if not capabilities:
+            warnings.append(
+                "core_capabilities 为空，"
+                "能力描述类回答将没有具体内容"
+            )
+
+        # 4. 输出汇总
+        if warnings:
+            logger.warning("=" * 55)
+            logger.warning(f"配置校验发现问题 ({len(warnings)} 项)：")
+            for i, w in enumerate(warnings, 1):
+                logger.warning(f"  {i}. {w}")
+            logger.warning("  请修改 model_identity_config.json 后重新运行。")
+            logger.warning("=" * 55)
+        else:
+            logger.info("配置校验通过")
+
     def _extract_core_identity(self):
         """从配置文件提取核心身份信息（向后兼容）"""
         model_info = self.identity_config.get('model_info', {})
@@ -173,7 +233,7 @@ class SelfCognitionDataGenerator:
                 "英文": domain_code  # 英文缩写即为代码
             }
         
-        logger.info(f"📝 已加载核心身份信息:")
+        logger.info(f" 已加载核心身份信息:")
         logger.info(f"   模型名称: {self.CORE_IDENTITY['名称']}")
         logger.info(f"   公司: {self.CORE_IDENTITY['公司']}")
         logger.info(f"   核心能力: {', '.join(self.CORE_IDENTITY['能力'][:3])}...")
@@ -752,7 +812,7 @@ class SelfCognitionDataGenerator:
     
     def generate_all(self) -> List[Dict]:
         """生成所有类型的数据"""
-        print("🚀 开始生成数据...")
+        print("开始生成数据...")
         
         print("  ├─ 生成身份介绍类问题...")
         identity_data = self.generate_identity_questions()
@@ -777,7 +837,7 @@ class SelfCognitionDataGenerator:
             complex_data
         )
         
-        print(f"\n✅ 总计生成 {len(self.generated_data)} 条数据")
+        print(f"\n总计生成 {len(self.generated_data)} 条数据")
         return self.generated_data
     
     def export_to_json(self, output_file: str = "self_cognition_training_data.json"):
@@ -813,66 +873,74 @@ class SelfCognitionDataGenerator:
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(formatted_data, f, ensure_ascii=False, indent=2)
         
-        print(f"✅ 已导出到 {output_file}")
+        print(f"已导出到 {output_file}")
         return output_file
     
+
+    @staticmethod
+    def _normalize_no_think(instruction: str, input_text: str, output: str) -> tuple:
+        """
+        根据 output 中是否包含 <think> 推理内容，规范化 instruction/input 的 /no_think 后缀。
+
+        推理类训练平台约定：
+          - output 含 <think>...</think> 时，不应以 /no_think 结尾（模型自行推理）
+          - output 不含推理时，需要 /no_think 结尾（跳过推理阶段）
+
+        Returns:
+            (instruction, input_text) 规范化后的元组
+        """
+        import re
+
+        # 检测 output 中是否包含非空的思考过程
+        reasoning_match = re.search(r'<think>(.*?)</think>', output, re.DOTALL)
+        has_reasoning = False
+        if reasoning_match:
+            content = reasoning_match.group(1)
+            has_reasoning = bool(content.replace('\n', '').replace('\r', '').strip())
+
+        combined = instruction + input_text
+
+        if has_reasoning:
+            if combined.endswith("/no_think"):
+                if instruction.endswith("/no_think"):
+                    instruction = instruction[:-len("/no_think")]
+                elif input_text.endswith("/no_think"):
+                    input_text = input_text[:-len("/no_think")]
+        else:
+            if not combined.endswith("/no_think"):
+                if input_text == "":
+                    instruction = instruction + "/no_think"
+                else:
+                    input_text = input_text + "/no_think"
+
+        return instruction, input_text
+
     def export_to_jsonl(self, output_file: str = "self_cognition_training_data.jsonl"):
         """导出为JSONL格式"""
         if not self.generated_data:
             self.generate_all()
-        
-        import re
-        
+
         with open(output_file, "w", encoding="utf-8") as f:
             for item in self.generated_data:
                 instruction = item["question"]
                 output = item["answer"]
-                
-                # 检查output中是否包含思考过程
-                # 检查<think>和</think>之间是否有非换行符的字符
-                reasoning_match = re.search(r'<think>(.*?)</think>', output, re.DOTALL)
-                has_reasoning = False
-                if reasoning_match:
-                    # 检查标签之间的内容，去除换行符后是否还有字符
-                    content = reasoning_match.group(1)
-                    # 移除所有换行符，检查是否还有非空白字符
-                    content_without_newlines = content.replace('\n', '').replace('\r', '')
-                    has_reasoning = content_without_newlines.strip() != ""
-                
-                # 获取input字段（如果不存在则为空字符串）
                 input_text = item.get("input", "")
-                
-                # 检查instruction+input的组合结尾
-                combined_text = instruction + input_text
-                
-                # 如果output中有思考过程（有非换行符字符），确保instruction+input的结尾不是/no_think
-                if has_reasoning:
-                    if combined_text.endswith("/no_think"):
-                        # 从instruction或input中移除/no_think
-                        if instruction.endswith("/no_think"):
-                            instruction = instruction[:-9]
-                        elif input_text.endswith("/no_think"):
-                            input_text = input_text[:-9]
-                # 如果output中没有思考过程，确保instruction+input的结尾有/no_think
-                else:
-                    if not combined_text.endswith("/no_think"):
-                        # 优先添加到input，如果input为空则添加到instruction
-                        if input_text == "":
-                            instruction = instruction + "/no_think"
-                        else:
-                            input_text = input_text + "/no_think"
-                
+
+                instruction, input_text = self._normalize_no_think(
+                    instruction, input_text, output
+                )
+
                 json_line = {
                     "instruction": instruction,
                     "output": output,
                     "system": f"你是{self.CORE_IDENTITY['名称']}，由{self.CORE_IDENTITY['公司']}研发训练。",
                     "category": item.get("category", ""),
                     "difficulty": item.get("difficulty", ""),
-                    "input": ""
+                    "input": input_text,
                 }
                 f.write(json.dumps(json_line, ensure_ascii=False) + "\n")
-        
-        print(f"✅ 已导出到 {output_file}")
+
+        print(f"已导出到 {output_file}")
         return output_file
     
     def export_to_excel(self, output_file: str = "self_cognition_training_data.xlsx"):
@@ -894,7 +962,7 @@ class SelfCognitionDataGenerator:
         ])
         
         df.to_excel(output_file, index=False, engine='openpyxl')
-        print(f"✅ 已导出到 {output_file}")
+        print(f"已导出到 {output_file}")
         return output_file
     
     def get_statistics(self) -> Dict:
@@ -922,7 +990,7 @@ class SelfCognitionDataGenerator:
 def main():
     """主函数"""
     print("="*60)
-    print("🎯 大模型自我认知数据生成器")
+    print("大模型自我认知数据生成器")
     print("="*60)
     print()
     
@@ -933,7 +1001,7 @@ def main():
     data = generator.generate_all()
     
     # 打印统计信息
-    print("\n📊 数据统计：")
+    print("\n数据统计：")
     stats = generator.get_statistics()
     for key, value in stats.items():
         if isinstance(value, dict):
@@ -942,17 +1010,17 @@ def main():
                 print(f"  - {k}: {v}")
         else:
             print(f"  {key}: {value}")
-    
+
     # 导出数据
-    print("\n💾 导出数据...")
+    print("\n导出数据...")
     generator.export_to_json("self_cognition_training_data.json")
     generator.export_to_jsonl("self_cognition_training_data.jsonl")
     generator.export_to_excel("self_cognition_training_data.xlsx")
-    
+
     print("\n" + "="*60)
-    print("✅ 数据生成完成！")
+    print("数据生成完成！")
     print("="*60)
-    print("\n📝 后续步骤：")
+    print("\n后续步骤：")
     print("1. 人工审核 Excel 文件中的数据质量")
     print("2. 根据审核结果调整和补充数据")
     print("3. 使用 JSON/JSONL 文件进行模型训练")
